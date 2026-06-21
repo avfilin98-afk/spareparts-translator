@@ -142,46 +142,46 @@ startBtn.onclick = async () => {
   const col = parseInt(colSel.value);
 
   const items = rows.slice(1)
-    .map(r => r[col])
+    .map(r => String(r[col] || '').trim())
     .filter(Boolean);
 
-  // 1️⃣ создаём job
+  // 1. create job
   const job = await fetch('/api/upload', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ items })
   }).then(r => r.json());
 
-  status.innerText = 'Задача создана. ID: ' + job.jobId;
+  status.innerText = 'Задача создана';
 
-  // 2️⃣ запускаем обработку
+  // 2. start processing
   fetch('/api/process?jobId=' + job.jobId);
 
-  // 3️⃣ polling статуса
+  // 3. poll
   let done = false;
   let result;
 
   while (!done) {
     const j = await fetch('/api/status?jobId=' + job.jobId).then(r => r.json());
 
+    if (j.status === 'error') {
+      status.innerText = 'Ошибка: ' + j.error;
+      startBtn.disabled = false;
+      return;
+    }
+
+    bar.style.width = (j.progress || 0) + '%';
+    status.innerText = 'Обработка: ' + (j.progress || 0) + '%';
+
     if (j.status === 'done') {
       done = true;
       result = j.result;
     }
 
-    if (j.status === 'error') {
-      status.innerText = 'Ошибка: ' + j.error;
-      return;
-    }
-
-    const p = j.progress || 0;
-    bar.style.width = p + '%';
-    status.innerText = `Обработка: ${p}%`;
-
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1500));
   }
 
-  // 4️⃣ собираем Excel
+  // 4. build excel
   const newRows = rows.map((r, i) => {
     if (i === 0) return [...r, 'Перевод', 'Описание'];
 
@@ -200,7 +200,7 @@ startBtn.onclick = async () => {
 
   XLSX.writeFile(wb, 'translated.xlsx');
 
-  status.innerText = 'Готово';
+  status.innerText = 'Готово. Файл скачан.';
   startBtn.disabled = false;
 };
 </script>
