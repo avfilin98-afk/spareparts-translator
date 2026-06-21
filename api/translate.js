@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     return res.status(500).json({
-      error: 'GROQ_API_KEY не настроен'
+      error: 'GROQ_API_KEY не настроен в Vercel'
     });
   }
 
@@ -15,14 +15,15 @@ export default async function handler(req, res) {
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      error: 'items пустой'
+      error: 'items пустой или неверный'
     });
   }
 
   const prompt = `
 Ты технический переводчик запчастей.
 
-Верни строго JSON:
+Верни СТРОГО JSON:
+
 {
   "results": [
     {
@@ -35,7 +36,8 @@ export default async function handler(req, res) {
 Правила:
 - только JSON
 - без текста
-- массив = ${items.length}
+- без markdown
+- длина массива = ${items.length}
 
 Данные:
 ${JSON.stringify(items)}
@@ -53,7 +55,7 @@ ${JSON.stringify(items)}
         messages: [
           {
             role: 'system',
-            content: 'Отвечай только JSON. Без текста.'
+            content: 'Ты возвращаешь только JSON без текста.'
           },
           {
             role: 'user',
@@ -66,7 +68,14 @@ ${JSON.stringify(items)}
 
     const data = await response.json();
 
-    console.log('GROQ RESPONSE:', JSON.stringify(data, null, 2));
+    console.log('GROQ RAW:', JSON.stringify(data, null, 2));
+
+    if (data?.error) {
+      return res.status(502).json({
+        error: 'Ошибка Groq API',
+        details: data.error
+      });
+    }
 
     const text = data?.choices?.[0]?.message?.content;
 
@@ -83,11 +92,16 @@ ${JSON.stringify(items)}
       parsed = JSON.parse(text);
     } catch (e) {
       const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw e;
+      if (!match) {
+        return res.status(502).json({
+          error: 'Не удалось разобрать JSON',
+          raw: text
+        });
+      }
       parsed = JSON.parse(match[0]);
     }
 
-    if (!Array.isArray(parsed?.results)) {
+    if (!Array.isArray(parsed.results)) {
       return res.status(502).json({
         error: 'Неверный формат ответа',
         raw: parsed
