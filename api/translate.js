@@ -3,19 +3,25 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { items } = req.body || {};
-
-  if (!Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'items пустой' });
-  }
-
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: 'GROQ_API_KEY не настроен' });
+    return res.status(500).json({
+      error: 'GROQ_API_KEY не настроен'
+    });
+  }
+
+  const { items } = req.body || {};
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({
+      error: 'items пустой'
+    });
   }
 
   const prompt = `
+Ты технический переводчик запчастей.
+
 Верни строго JSON:
 {
   "results": [
@@ -26,7 +32,12 @@ export default async function handler(req, res) {
   ]
 }
 
-Список:
+Правила:
+- только JSON
+- без текста
+- массив = ${items.length}
+
+Данные:
 ${JSON.stringify(items)}
 `;
 
@@ -40,8 +51,14 @@ ${JSON.stringify(items)}
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
         messages: [
-          { role: 'system', content: 'Отвечай только JSON.' },
-          { role: 'user', content: prompt }
+          {
+            role: 'system',
+            content: 'Отвечай только JSON. Без текста.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
         ],
         temperature: 0
       })
@@ -49,7 +66,7 @@ ${JSON.stringify(items)}
 
     const data = await response.json();
 
-    console.log('GROQ RAW:', JSON.stringify(data, null, 2));
+    console.log('GROQ RESPONSE:', JSON.stringify(data, null, 2));
 
     const text = data?.choices?.[0]?.message?.content;
 
@@ -61,6 +78,7 @@ ${JSON.stringify(items)}
     }
 
     let parsed;
+
     try {
       parsed = JSON.parse(text);
     } catch (e) {
@@ -69,10 +87,20 @@ ${JSON.stringify(items)}
       parsed = JSON.parse(match[0]);
     }
 
-    return res.status(200).json(parsed);
+    if (!Array.isArray(parsed?.results)) {
+      return res.status(502).json({
+        error: 'Неверный формат ответа',
+        raw: parsed
+      });
+    }
+
+    return res.status(200).json({
+      results: parsed.results
+    });
+
   } catch (err) {
     return res.status(500).json({
-      error: 'Ошибка сервера',
+      error: 'Серверная ошибка',
       details: String(err)
     });
   }
