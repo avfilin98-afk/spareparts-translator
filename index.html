@@ -4,7 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Перевод запчастей для таможни</title>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <style>
   :root {
     --bg: #14171c;
@@ -14,374 +16,255 @@
     --accent-dim: #b5582a;
     --text: #e8eaed;
     --text-dim: #9aa3b2;
-    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-    --sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --mono: monospace;
+    --sans: system-ui, sans-serif;
   }
+
   * { box-sizing: border-box; }
+
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
     font-family: var(--sans);
-    min-height: 100vh;
   }
+
   .wrap {
-    max-width: 880px;
+    max-width: 900px;
     margin: 0 auto;
-    padding: 48px 24px 80px;
+    padding: 40px 20px 80px;
   }
-  header {
-    margin-bottom: 36px;
-  }
-  .eyebrow {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 10px;
-  }
-  h1 {
-    font-size: 32px;
-    line-height: 1.15;
-    margin: 0 0 10px;
-    font-weight: 700;
-  }
-  .sub {
-    color: var(--text-dim);
-    font-size: 15px;
-    line-height: 1.5;
-    max-width: 560px;
-  }
+
+  header { margin-bottom: 30px; }
+
+  h1 { margin: 0 0 10px; }
+
+  .sub { color: var(--text-dim); }
+
   .panel {
     background: var(--panel);
     border: 1px solid var(--panel-border);
     border-radius: 10px;
-    padding: 28px;
-    margin-bottom: 20px;
-  }
-  .step-num {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--accent);
-    margin-bottom: 8px;
-    letter-spacing: 0.08em;
-  }
-  .step-title {
-    font-size: 17px;
-    font-weight: 600;
+    padding: 24px;
     margin-bottom: 16px;
   }
+
   .dropzone {
-    border: 1.5px dashed var(--panel-border);
-    border-radius: 8px;
-    padding: 32px;
+    border: 2px dashed var(--panel-border);
+    padding: 30px;
     text-align: center;
     cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
+    border-radius: 10px;
   }
-  .dropzone:hover, .dropzone.drag {
+
+  .dropzone.drag {
     border-color: var(--accent);
-    background: rgba(255, 122, 51, 0.04);
+    background: rgba(255,122,51,0.05);
   }
-  .dropzone p {
-    margin: 0;
-    color: var(--text-dim);
-    font-size: 14px;
-  }
-  .dropzone .filename {
-    color: var(--text);
-    font-weight: 600;
-    margin-top: 6px;
-  }
-  input[type="file"] { display: none; }
+
   select, button {
-    font-family: var(--sans);
-    font-size: 14px;
-  }
-  select {
     width: 100%;
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--panel-border);
+    margin-top: 10px;
+    padding: 10px;
     border-radius: 6px;
-    padding: 10px 12px;
-    margin-top: 6px;
+    border: 1px solid var(--panel-border);
+    background: #0f1217;
+    color: var(--text);
   }
-  label.field-label {
-    font-size: 13px;
-    color: var(--text-dim);
-  }
+
   button {
     background: var(--accent);
-    color: #1a1006;
-    border: none;
-    border-radius: 6px;
-    padding: 12px 22px;
-    font-weight: 700;
+    font-weight: bold;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
+    border: none;
   }
-  button:hover:not(:disabled) { background: #ff8c4d; }
-  button:active:not(:disabled) { transform: scale(0.98); }
+
   button:disabled {
-    background: var(--accent-dim);
-    cursor: not-allowed;
-    opacity: 0.6;
+    opacity: .5;
   }
-  .row { display: flex; align-items: center; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
-  .progress-wrap {
-    margin-top: 18px;
-    display: none;
-  }
-  .progress-bar {
+
+  .progress {
+    margin-top: 10px;
     height: 8px;
-    background: var(--bg);
-    border-radius: 4px;
+    background: #0f1217;
+    border-radius: 5px;
     overflow: hidden;
-    border: 1px solid var(--panel-border);
   }
-  .progress-fill {
+
+  .bar {
     height: 100%;
     width: 0%;
     background: var(--accent);
-    transition: width 0.3s;
+    transition: width .2s;
   }
-  .progress-label {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-top: 8px;
-  }
+
   .status {
-    margin-top: 14px;
+    margin-top: 10px;
     font-size: 13px;
-    line-height: 1.5;
-  }
-  .status.error { color: #ff7070; }
-  .status.success { color: #6fd98a; }
-  .hidden { display: none; }
-  footer {
-    margin-top: 40px;
     color: var(--text-dim);
-    font-size: 12px;
-    text-align: center;
   }
+
+  .error { color: #ff6b6b; }
+  .success { color: #7dff9b; }
 </style>
 </head>
+
 <body>
 <div class="wrap">
 
-  <header>
-    <div class="eyebrow">EXCEL → RU + ТАМОЖНЯ</div>
-    <h1>Перевод запчастей и описание для декларации</h1>
-    <p class="sub">Загружаешь Excel со списком запчастей на китайском или английском — получаешь обратно тот же файл с двумя новыми колонками: технический перевод на русский и описание для таможенной декларации.</p>
-  </header>
+<header>
+  <h1>Перевод запчастей</h1>
+  <div class="sub">Excel → RU + описание для таможни</div>
+</header>
 
-  <div class="panel">
-    <div class="step-num">ШАГ 1</div>
-    <div class="step-title">Загрузи Excel-файл</div>
-    <div class="dropzone" id="dropzone">
-      <p>Нажми, чтобы выбрать файл, или перетащи его сюда</p>
-      <div class="filename" id="filename"></div>
-    </div>
-    <input type="file" id="fileInput" accept=".xlsx,.xls" />
+<div class="panel">
+  <div class="dropzone" id="dropzone">
+    Перетащи Excel или нажми
+    <div id="filename"></div>
   </div>
+  <input type="file" id="fileInput" hidden />
+</div>
 
-  <div class="panel hidden" id="panelColumn">
-    <div class="step-num">ШАГ 2</div>
-    <div class="step-title">Выбери лист и колонку с названиями</div>
-    <label class="field-label">Лист</label>
-    <select id="sheetSelect"></select>
-    <label class="field-label" style="display:block; margin-top:14px;">Колонка с названием детали</label>
-    <select id="columnSelect"></select>
-  </div>
+<div class="panel hidden" id="sheetPanel">
+  <div>Лист:</div>
+  <select id="sheet"></select>
 
-  <div class="panel hidden" id="panelRun">
-    <div class="step-num">ШАГ 3</div>
-    <div class="step-title">Запусти перевод</div>
-    <div class="row">
-      <button id="runBtn">Перевести и сгенерировать файл</button>
-      <span id="rowCount" style="color: var(--text-dim); font-size: 13px;"></span>
-    </div>
-    <div class="progress-wrap" id="progressWrap">
-      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-      <div class="progress-label" id="progressLabel"></div>
-    </div>
-    <div id="statusBox"></div>
-  </div>
+  <div>Колонка:</div>
+  <select id="column"></select>
+</div>
+
+<div class="panel hidden" id="runPanel">
+  <button id="run">Перевести</button>
+
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <div class="status" id="status"></div>
+</div>
 
 </div>
 
-<footer>Данные отправляются только в DeepSeek для обработки. Файлы не сохраняются на сервере.</footer>
-
 <script>
-const dropzone = document.getElementById('dropzone');
+let wb;
+
+const drop = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
-const filenameEl = document.getElementById('filename');
-const panelColumn = document.getElementById('panelColumn');
-const panelRun = document.getElementById('panelRun');
-const sheetSelect = document.getElementById('sheetSelect');
-const columnSelect = document.getElementById('columnSelect');
-const runBtn = document.getElementById('runBtn');
-const rowCountEl = document.getElementById('rowCount');
-const progressWrap = document.getElementById('progressWrap');
-const progressFill = document.getElementById('progressFill');
-const progressLabel = document.getElementById('progressLabel');
-const statusBox = document.getElementById('statusBox');
+const filename = document.getElementById('filename');
 
-let workbook = null;
-let currentFile = null;
+const sheetPanel = document.getElementById('sheetPanel');
+const runPanel = document.getElementById('runPanel');
 
-dropzone.addEventListener('click', () => fileInput.click());
-dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
-dropzone.addEventListener('drop', (e) => {
+const sheetSel = document.getElementById('sheet');
+const colSel = document.getElementById('column');
+
+const runBtn = document.getElementById('run');
+const bar = document.getElementById('bar');
+const status = document.getElementById('status');
+
+drop.onclick = () => fileInput.click();
+
+drop.ondragover = e => {
   e.preventDefault();
-  dropzone.classList.remove('drag');
-  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', (e) => {
-  if (e.target.files.length) handleFile(e.target.files[0]);
-});
+  drop.classList.add('drag');
+};
 
-function handleFile(file) {
-  currentFile = file;
-  filenameEl.textContent = file.name;
+drop.ondragleave = () => drop.classList.remove('drag');
+
+drop.ondrop = e => {
+  e.preventDefault();
+  drop.classList.remove('drag');
+  handle(e.dataTransfer.files[0]);
+};
+
+fileInput.onchange = e => handle(e.target.files[0]);
+
+function handle(file) {
+  filename.textContent = file.name;
+
   const reader = new FileReader();
-  reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result);
-    workbook = XLSX.read(data, { type: 'array' });
-    populateSheets();
+  reader.onload = e => {
+    wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+    loadSheets();
   };
   reader.readAsArrayBuffer(file);
 }
 
-function populateSheets() {
-  sheetSelect.innerHTML = '';
-  workbook.SheetNames.forEach((name) => {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    sheetSelect.appendChild(opt);
+function loadSheets() {
+  sheetSel.innerHTML = '';
+  wb.SheetNames.forEach(n => {
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = n;
+    sheetSel.appendChild(o);
   });
-  panelColumn.classList.remove('hidden');
-  populateColumns();
+
+  sheetPanel.classList.remove('hidden');
+  loadCols();
 }
 
-sheetSelect.addEventListener('change', populateColumns);
+sheetSel.onchange = loadCols;
 
-function getHeaderRow() {
-  const sheet = workbook.Sheets[sheetSelect.value];
-  const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-  return json[0] || [];
-}
+function loadCols() {
+  const sheet = wb.Sheets[sheetSel.value];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+  const headers = rows[0] || [];
 
-function populateColumns() {
-  const headers = getHeaderRow();
-  columnSelect.innerHTML = '';
-  headers.forEach((h, idx) => {
-    const opt = document.createElement('option');
-    opt.value = idx;
-    opt.textContent = h ? h : '(колонка ' + (idx + 1) + ')';
-    columnSelect.appendChild(opt);
+  colSel.innerHTML = '';
+
+  headers.forEach((h, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = h || ('Колонка ' + (i+1));
+    colSel.appendChild(o);
   });
-  panelRun.classList.remove('hidden');
-  updateRowCount();
+
+  runPanel.classList.remove('hidden');
 }
 
-columnSelect.addEventListener('change', updateRowCount);
-
-function updateRowCount() {
-  const sheet = workbook.Sheets[sheetSelect.value];
-  const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-  const count = Math.max(0, json.length - 1);
-  rowCountEl.textContent = count + ' строк будет обработано';
-}
-
-function setStatus(msg, type) {
-  statusBox.innerHTML = '';
-  if (!msg) return;
-  const div = document.createElement('div');
-  div.className = 'status' + (type ? ' ' + type : '');
-  div.textContent = msg;
-  statusBox.appendChild(div);
-}
-
-const BATCH_SIZE = 15;
-
-runBtn.addEventListener('click', async () => {
-  if (!workbook) return;
+run.onclick = async () => {
   runBtn.disabled = true;
-  setStatus('');
-  progressWrap.style.display = 'block';
-  progressFill.style.width = '0%';
+  status.textContent = '';
+  bar.style.width = '0%';
+
+  const sheet = wb.Sheets[sheetSel.value];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+  const col = +colSel.value;
+  const data = rows.slice(1);
+
+  const names = data.map(r => String(r[col] || '').trim());
+
+  const results = [];
 
   try {
-    const sheetName = sheetSelect.value;
-    const colIndex = parseInt(columnSelect.value, 10);
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    for (let i = 0; i < names.length; i += 10) {
+      const batch = names.slice(i, i + 10).filter(Boolean);
 
-    const header = rows[0];
-    const dataRows = rows.slice(1);
-    const names = dataRows.map((r) => String(r[colIndex] ?? '').trim());
+      const r = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: batch })
+      });
 
-    const translations = new Array(names.length).fill(null);
+      const json = await r.json();
 
-    let processed = 0;
-    for (let i = 0; i < names.length; i += BATCH_SIZE) {
-      const batchIndexes = [];
-      const batchNames = [];
-      for (let j = i; j < Math.min(i + BATCH_SIZE, names.length); j++) {
-        if (names[j]) {
-          batchIndexes.push(j);
-          batchNames.push(names[j]);
-        }
-      }
-      if (batchNames.length > 0) {
-        const resp = await fetch('/api/translate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: batchNames })
-        });
-        const data = await resp.json();
-        if (!resp.ok) {
-          throw new Error(data.error || 'Ошибка сервера');
-        }
-        data.results.forEach((res, k) => {
-          translations[batchIndexes[k]] = res;
-        });
-      }
-      processed = Math.min(i + BATCH_SIZE, names.length);
-      const pct = Math.round((processed / names.length) * 100);
-      progressFill.style.width = pct + '%';
-      progressLabel.textContent = processed + ' из ' + names.length + ' строк обработано (' + pct + '%)';
+      if (!r.ok) throw new Error(json.error || 'API error');
+
+      results.push(...json.results);
+
+      bar.style.width = Math.round((i / names.length) * 100) + '%';
     }
 
-    // Собираем новый лист
-    const newHeader = [...header, 'Перевод (RU)', 'Описание для таможни'];
-    const newRows = dataRows.map((row, idx) => {
-      const t = translations[idx];
-      return [...row, t ? t.translation : '', t ? t.customs_description : ''];
-    });
-    const finalRows = [newHeader, ...newRows];
+    bar.style.width = '100%';
+    status.textContent = 'Готово';
+    status.className = 'status success';
 
-    const newSheet = XLSX.utils.aoa_to_sheet(finalRows);
-    const newWorkbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(newWorkbook, newSheet, sheetName);
-
-    const outName = (currentFile.name.replace(/\.(xlsx|xls)$/i, '') || 'result') + '_переведено.xlsx';
-    XLSX.writeFile(newWorkbook, outName);
-
-    setStatus('Готово! Файл "' + outName + '" скачан.', 'success');
-  } catch (err) {
-    console.error(err);
-    setStatus('Ошибка: ' + err.message, 'error');
-  } finally {
-    runBtn.disabled = false;
+  } catch (e) {
+    status.textContent = 'Ошибка: ' + e.message;
+    status.className = 'status error';
   }
-});
+
+  runBtn.disabled = false;
+};
 </script>
+
 </body>
 </html>
