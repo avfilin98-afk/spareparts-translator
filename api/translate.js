@@ -21,106 +21,111 @@ export default async function handler(req, res) {
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const prompt = `
-Ты технический переводчик запчастей.
+  const MAX_RETRIES = 5;
 
-Верни строго JSON:
+  async function callGroqWithRetry(batch, attempt = 1) {
+    try {
+      const response = await fetch(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              {
+                role: 'system',
+                content: 'Отвечай ТОЛЬКО JSON без текста.'
+              },
+              {
+                role: 'user',
+                content: `
+Верни JSON:
 {
   "results": [
-    {
-      "translation": "",
-      "customs_description": ""
-    }
+    { "translation": "", "customs_description": "" }
   ]
 }
 
-Правила:
-- только JSON
-- без markdown
-- без текста
-- массив = ${items.length}
+Количество строго = ${batch.length}
 
 Данные:
-${JSON.stringify(items)}
-`;
+${JSON.stringify(batch)}
+                `
+              }
+            ],
+            temperature: 0
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      // 🚨 RATE LIMIT
+      if (data?.error?.code === 'rate_limit_exceeded') {
+        if (attempt < MAX_RETRIES) {
+          const wait = 2000 * attempt; // 2s, 4s, 6s...
+          await sleep(wait);
+          return callGroqWithRetry(batch, attempt + 1);
+        }
+        throw new Error('Rate limit exceeded after retries');
+      }
+
+      if (data?.error) {
+        throw new Error(JSON.stringify(data.error));
+      }
+
+      const text = data?.choices?.[0]?.message?.content;
+
+      if (!text) {
+        throw new Error('Empty response');
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch (e) {
+        const match = text.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(match[0]);
+      }
+
+      if (!Array.isArray(parsed.results)) {
+        throw new Error('Bad format');
+      }
+
+      return parsed.results;
+
+    } catch (err) {
+      if (attempt < MAX_RETRIES) {
+        await sleep(2000 * attempt);
+        return callGroqWithRetry(batch, attempt + 1);
+      }
+      throw err;
+    }
+  }
 
   try {
-    const response = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            {
-              role: 'system',
-              content: 'Отвечай только JSON без пояснений.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0
-        })
-      }
-    );
+    const BATCH_SIZE = 3; // 🔥 маленькие батчи = стабильность
 
-    const data = await response.json();
+    const results = new Array(items.length).fill(null);
 
-    // 🔥 защита от rate limit
-    if (data?.error?.code === 'rate_limit_exceeded') {
-      await sleep(1200);
-      return res.status(429).json({
-        error: 'Groq rate limit exceeded, try again'
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batchItems = items.slice(i, i + BATCH_SIZE);
+
+      const batchResult = await callGroqWithRetry(batchItems);
+
+      batchResult.forEach((r, idx) => {
+        results[i + idx] = r;
       });
+
+      // 🔥 ключ к стабильности — пауза
+      await sleep(2000);
     }
 
-    if (data?.error) {
-      return res.status(502).json({
-        error: 'Groq API error',
-        details: data.error
-      });
-    }
-
-    const text = data?.choices?.[0]?.message?.content;
-
-    if (!text) {
-      return res.status(502).json({
-        error: 'Пустой ответ от Groq',
-        raw: data
-      });
-    }
-
-    let parsed;
-
-    try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) {
-        return res.status(502).json({
-          error: 'JSON parse error',
-          raw: text
-        });
-      }
-      parsed = JSON.parse(match[0]);
-    }
-
-    if (!Array.isArray(parsed.results)) {
-      return res.status(502).json({
-        error: 'Неверный формат ответа',
-        raw: parsed
-      });
-    }
-
-    return res.status(200).json({
-      results: parsed.results
-    });
+    return res.status(200).json({ results });
 
   } catch (err) {
     return res.status(500).json({
