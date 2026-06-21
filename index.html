@@ -2,267 +2,206 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Перевод запчастей для таможни</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Перевод запчастей</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
-  :root {
-    --bg: #14171c;
-    --panel: #1c2129;
-    --panel-border: #2a3140;
-    --accent: #ff7a33;
-    --accent-dim: #b5582a;
-    --text: #e8eaed;
-    --text-dim: #9aa3b2;
-    --mono: monospace;
-    --sans: system-ui, sans-serif;
-  }
+body {
+  margin: 0;
+  background: #14171c;
+  color: #e8eaed;
+  font-family: Arial, sans-serif;
+}
 
-  * { box-sizing: border-box; }
+.wrap {
+  max-width: 900px;
+  margin: auto;
+  padding: 40px;
+}
 
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-  }
+.panel {
+  background: #1c2129;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  border: 1px solid #2a3140;
+}
 
-  .wrap {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 40px 20px 80px;
-  }
+button {
+  padding: 12px 18px;
+  border: 0;
+  background: #ff7a33;
+  color: black;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 6px;
+}
 
-  header { margin-bottom: 30px; }
+button:disabled {
+  opacity: 0.5;
+}
 
-  h1 { margin: 0 0 10px; }
+.status {
+  margin-top: 10px;
+  font-size: 14px;
+}
 
-  .sub { color: var(--text-dim); }
+.progress {
+  height: 8px;
+  background: #2a3140;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 10px;
+}
 
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    padding: 24px;
-    margin-bottom: 16px;
-  }
-
-  .dropzone {
-    border: 2px dashed var(--panel-border);
-    padding: 30px;
-    text-align: center;
-    cursor: pointer;
-    border-radius: 10px;
-  }
-
-  .dropzone.drag {
-    border-color: var(--accent);
-    background: rgba(255,122,51,0.05);
-  }
-
-  select, button {
-    width: 100%;
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 6px;
-    border: 1px solid var(--panel-border);
-    background: #0f1217;
-    color: var(--text);
-  }
-
-  button {
-    background: var(--accent);
-    font-weight: bold;
-    cursor: pointer;
-    border: none;
-  }
-
-  button:disabled {
-    opacity: .5;
-  }
-
-  .progress {
-    margin-top: 10px;
-    height: 8px;
-    background: #0f1217;
-    border-radius: 5px;
-    overflow: hidden;
-  }
-
-  .bar {
-    height: 100%;
-    width: 0%;
-    background: var(--accent);
-    transition: width .2s;
-  }
-
-  .status {
-    margin-top: 10px;
-    font-size: 13px;
-    color: var(--text-dim);
-  }
-
-  .error { color: #ff6b6b; }
-  .success { color: #7dff9b; }
+.bar {
+  height: 100%;
+  width: 0%;
+  background: #ff7a33;
+}
 </style>
 </head>
 
 <body>
 <div class="wrap">
 
-<header>
-  <h1>Перевод запчастей</h1>
-  <div class="sub">Excel → RU + описание для таможни</div>
-</header>
+  <div class="panel">
+    <h2>Excel перевод запчастей</h2>
 
-<div class="panel">
-  <div class="dropzone" id="dropzone">
-    Перетащи Excel или нажми
-    <div id="filename"></div>
+    <input type="file" id="file"/>
+
+    <br/><br/>
+
+    <select id="sheet"></select>
+    <select id="column"></select>
+
+    <br/><br/>
+
+    <button id="start">Запустить перевод</button>
+
+    <div class="progress">
+      <div class="bar" id="bar"></div>
+    </div>
+
+    <div class="status" id="status"></div>
   </div>
-  <input type="file" id="fileInput" hidden />
-</div>
-
-<div class="panel hidden" id="sheetPanel">
-  <div>Лист:</div>
-  <select id="sheet"></select>
-
-  <div>Колонка:</div>
-  <select id="column"></select>
-</div>
-
-<div class="panel hidden" id="runPanel">
-  <button id="run">Перевести</button>
-
-  <div class="progress"><div class="bar" id="bar"></div></div>
-  <div class="status" id="status"></div>
-</div>
 
 </div>
 
 <script>
-let wb;
+let workbook;
 
-const drop = document.getElementById('dropzone');
-const fileInput = document.getElementById('fileInput');
-const filename = document.getElementById('filename');
-
-const sheetPanel = document.getElementById('sheetPanel');
-const runPanel = document.getElementById('runPanel');
-
+const fileInput = document.getElementById('file');
 const sheetSel = document.getElementById('sheet');
 const colSel = document.getElementById('column');
-
-const runBtn = document.getElementById('run');
-const bar = document.getElementById('bar');
+const startBtn = document.getElementById('start');
 const status = document.getElementById('status');
+const bar = document.getElementById('bar');
 
-drop.onclick = () => fileInput.click();
-
-drop.ondragover = e => {
-  e.preventDefault();
-  drop.classList.add('drag');
-};
-
-drop.ondragleave = () => drop.classList.remove('drag');
-
-drop.ondrop = e => {
-  e.preventDefault();
-  drop.classList.remove('drag');
-  handle(e.dataTransfer.files[0]);
-};
-
-fileInput.onchange = e => handle(e.target.files[0]);
-
-function handle(file) {
-  filename.textContent = file.name;
-
+fileInput.addEventListener('change', e => {
   const reader = new FileReader();
-  reader.onload = e => {
-    wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-    loadSheets();
+
+  reader.onload = (evt) => {
+    const data = new Uint8Array(evt.target.result);
+    workbook = XLSX.read(data, { type: 'array' });
+
+    sheetSel.innerHTML = '';
+    workbook.SheetNames.forEach(s => {
+      sheetSel.innerHTML += `<option>${s}</option>`;
+    });
+
+    loadColumns();
   };
-  reader.readAsArrayBuffer(file);
-}
 
-function loadSheets() {
-  sheetSel.innerHTML = '';
-  wb.SheetNames.forEach(n => {
-    const o = document.createElement('option');
-    o.value = n;
-    o.textContent = n;
-    sheetSel.appendChild(o);
-  });
+  reader.readAsArrayBuffer(e.target.files[0]);
+});
 
-  sheetPanel.classList.remove('hidden');
-  loadCols();
-}
+sheetSel.addEventListener('change', loadColumns);
 
-sheetSel.onchange = loadCols;
-
-function loadCols() {
-  const sheet = wb.Sheets[sheetSel.value];
+function loadColumns() {
+  const sheet = workbook.Sheets[sheetSel.value];
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-  const headers = rows[0] || [];
+
+  const headers = rows[0];
 
   colSel.innerHTML = '';
 
   headers.forEach((h, i) => {
-    const o = document.createElement('option');
-    o.value = i;
-    o.textContent = h || ('Колонка ' + (i+1));
-    colSel.appendChild(o);
+    colSel.innerHTML += `<option value="${i}">${h || ('Колонка ' + i)}</option>`;
   });
-
-  runPanel.classList.remove('hidden');
 }
 
-run.onclick = async () => {
-  runBtn.disabled = true;
-  status.textContent = '';
-  bar.style.width = '0%';
+startBtn.onclick = async () => {
+  startBtn.disabled = true;
 
-  const sheet = wb.Sheets[sheetSel.value];
+  const sheet = workbook.Sheets[sheetSel.value];
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-  const col = +colSel.value;
-  const data = rows.slice(1);
+  const col = parseInt(colSel.value);
 
-  const names = data.map(r => String(r[col] || '').trim());
+  const items = rows.slice(1)
+    .map(r => r[col])
+    .filter(Boolean);
 
-  const results = [];
+  // 1️⃣ создаём job
+  const job = await fetch('/api/upload', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ items })
+  }).then(r => r.json());
 
-  try {
-    for (let i = 0; i < names.length; i += 10) {
-      const batch = names.slice(i, i + 10).filter(Boolean);
+  status.innerText = 'Задача создана. ID: ' + job.jobId;
 
-      const r = await fetch('/api/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: batch })
-      });
+  // 2️⃣ запускаем обработку
+  fetch('/api/process?jobId=' + job.jobId);
 
-      const json = await r.json();
+  // 3️⃣ polling статуса
+  let done = false;
+  let result;
 
-      if (!r.ok) throw new Error(json.error || 'API error');
+  while (!done) {
+    const j = await fetch('/api/status?jobId=' + job.jobId).then(r => r.json());
 
-      results.push(...json.results);
-
-      bar.style.width = Math.round((i / names.length) * 100) + '%';
+    if (j.status === 'done') {
+      done = true;
+      result = j.result;
     }
 
-    bar.style.width = '100%';
-    status.textContent = 'Готово';
-    status.className = 'status success';
+    if (j.status === 'error') {
+      status.innerText = 'Ошибка: ' + j.error;
+      return;
+    }
 
-  } catch (e) {
-    status.textContent = 'Ошибка: ' + e.message;
-    status.className = 'status error';
+    const p = j.progress || 0;
+    bar.style.width = p + '%';
+    status.innerText = `Обработка: ${p}%`;
+
+    await new Promise(r => setTimeout(r, 2000));
   }
 
-  runBtn.disabled = false;
+  // 4️⃣ собираем Excel
+  const newRows = rows.map((r, i) => {
+    if (i === 0) return [...r, 'Перевод', 'Описание'];
+
+    const item = result[i - 1] || {};
+
+    return [
+      ...r,
+      item.translation || '',
+      item.customs_description || ''
+    ];
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(newRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'result');
+
+  XLSX.writeFile(wb, 'translated.xlsx');
+
+  status.innerText = 'Готово';
+  startBtn.disabled = false;
 };
 </script>
 
