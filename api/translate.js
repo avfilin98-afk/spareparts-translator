@@ -20,7 +20,16 @@ export default async function handler(req, res) {
     return;
   }
 
-  const model = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v3.1:free';
+  const fallbackModels = [
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-r1:free',
+    'qwen/qwen3-coder:free',
+    'google/gemini-2.0-flash-exp:free',
+    'mistralai/mistral-7b-instruct:free'
+  ];
+  const models = process.env.OPENROUTER_MODEL
+    ? [process.env.OPENROUTER_MODEL, ...fallbackModels]
+    : fallbackModels;
 
   const prompt = `Ты - технический переводчик и специалист по таможенному декларированию запчастей для электроинструмента и бензоинструмента (например: дрели, болгарки, бензопилы, триммеры, генераторы и т.п.).
 
@@ -39,31 +48,43 @@ export default async function handler(req, res) {
 ${JSON.stringify(items, null, 0)}`;
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://spareparts-translator.vercel.app',
-        'X-Title': 'Spareparts Translator'
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: 'Ты отвечаешь только в формате JSON, без пояснений и без markdown.'
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.2,
-        response_format: { type: 'json_object' }
-      })
-    });
+    let response;
+    let lastErrText = '';
+    let usedModel = '';
 
-    if (!response.ok) {
-      const errText = await response.text();
-      res.status(502).json({ error: 'Ошибка от OpenRouter API', details: errText });
+    for (const model of models) {
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://spareparts-translator.vercel.app',
+          'X-Title': 'Spareparts Translator'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: 'Ты отвечаешь только в формате JSON, без пояснений и без markdown.'
+            },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.2,
+          response_format: { type: 'json_object' }
+        })
+      });
+
+      if (response.ok) {
+        usedModel = model;
+        break;
+      }
+
+      lastErrText = await response.text();
+    }
+
+    if (!response || !response.ok) {
+      res.status(502).json({ error: 'Ошибка от OpenRouter API (все модели недоступны)', details: lastErrText });
       return;
     }
 
