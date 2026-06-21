@@ -19,6 +19,8 @@ export default async function handler(req, res) {
     });
   }
 
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
   const prompt = `
 Ты технический переводчик запчастей.
 
@@ -56,7 +58,7 @@ ${JSON.stringify(items)}
           messages: [
             {
               role: 'system',
-              content: 'Отвечай только JSON без текста.'
+              content: 'Отвечай только JSON без пояснений.'
             },
             {
               role: 'user',
@@ -69,6 +71,14 @@ ${JSON.stringify(items)}
     );
 
     const data = await response.json();
+
+    // 🔥 защита от rate limit
+    if (data?.error?.code === 'rate_limit_exceeded') {
+      await sleep(1200);
+      return res.status(429).json({
+        error: 'Groq rate limit exceeded, try again'
+      });
+    }
 
     if (data?.error) {
       return res.status(502).json({
