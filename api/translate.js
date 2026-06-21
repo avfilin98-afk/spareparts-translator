@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     return res.status(500).json({
-      error: 'GROQ_API_KEY не настроен в Vercel'
+      error: 'GROQ_API_KEY не настроен'
     });
   }
 
@@ -21,28 +21,30 @@ export default async function handler(req, res) {
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const MAX_RETRIES = 5;
+  const BATCH_SIZE = 2;          // 🔥 максимально маленький батч
+  const BASE_DELAY = 2500;       // 🔥 базовая пауза
+  const MAX_RETRIES = 6;
 
-  async function callGroqWithRetry(batch, attempt = 1) {
-    try {
-      const response = await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              {
-                role: 'system',
-                content: 'Отвечай ТОЛЬКО JSON без текста.'
-              },
-              {
-                role: 'user',
-                content: `
+  async function callGroq(batch, attempt = 1) {
+    const response = await fetch(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0,
+          messages: [
+            {
+              role: 'system',
+              content: 'Отвечай только JSON без текста.'
+            },
+            {
+              role: 'user',
+              content: `
 Верни JSON:
 {
   "results": [
@@ -50,79 +52,65 @@ export default async function handler(req, res) {
   ]
 }
 
-Количество строго = ${batch.length}
+Строго ${batch.length} элементов.
 
 Данные:
 ${JSON.stringify(batch)}
-                `
-              }
-            ],
-            temperature: 0
-          })
-        }
-      );
-
-      const data = await response.json();
-
-      // 🚨 RATE LIMIT
-      if (data?.error?.code === 'rate_limit_exceeded') {
-        if (attempt < MAX_RETRIES) {
-          const wait = 2000 * attempt; // 2s, 4s, 6s...
-          await sleep(wait);
-          return callGroqWithRetry(batch, attempt + 1);
-        }
-        throw new Error('Rate limit exceeded after retries');
+              `
+            }
+          ]
+        })
       }
+    );
 
-      if (data?.error) {
-        throw new Error(JSON.stringify(data.error));
+    const data = await response.json();
+
+    // 🔥 RATE LIMIT HANDLING
+    if (data?.error?.code === 'rate_limit_exceeded') {
+      if (attempt <= MAX_RETRIES) {
+        const wait = BASE_DELAY * attempt;
+        await sleep(wait);
+        return callGroq(batch, attempt + 1);
       }
-
-      const text = data?.choices?.[0]?.message?.content;
-
-      if (!text) {
-        throw new Error('Empty response');
-      }
-
-      let parsed;
-      try {
-        parsed = JSON.parse(text);
-      } catch (e) {
-        const match = text.match(/\{[\s\S]*\}/);
-        parsed = JSON.parse(match[0]);
-      }
-
-      if (!Array.isArray(parsed.results)) {
-        throw new Error('Bad format');
-      }
-
-      return parsed.results;
-
-    } catch (err) {
-      if (attempt < MAX_RETRIES) {
-        await sleep(2000 * attempt);
-        return callGroqWithRetry(batch, attempt + 1);
-      }
-      throw err;
+      throw new Error('Rate limit exceeded permanently');
     }
+
+    if (data?.error) {
+      throw new Error(JSON.stringify(data.error));
+    }
+
+    const text = data?.choices?.[0]?.message?.content;
+
+    if (!text) {
+      throw new Error('Empty response');
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      const match = text.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(match[0]);
+    }
+
+    return parsed.results;
   }
 
   try {
-    const BATCH_SIZE = 3; // 🔥 маленькие батчи = стабильность
-
     const results = new Array(items.length).fill(null);
 
+    // 🚨 ВАЖНО: строго по очереди
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
-      const batchItems = items.slice(i, i + BATCH_SIZE);
+      const batch = items.slice(i, i + BATCH_SIZE);
 
-      const batchResult = await callGroqWithRetry(batchItems);
+      const batchResult = await callGroq(batch);
 
       batchResult.forEach((r, idx) => {
         results[i + idx] = r;
       });
 
-      // 🔥 ключ к стабильности — пауза
-      await sleep(2000);
+      // 🔥 ЖЁСТКАЯ ПАУЗА — ключ к стабильности
+      await sleep(BASE_DELAY);
     }
 
     return res.status(200).json({ results });
