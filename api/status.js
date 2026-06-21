@@ -1,13 +1,15 @@
-import { getJob } from './_queue.js';
+import { getStore } from './_store.js';
 
 export default async function handler(req, res) {
   const { jobId } = req.query;
 
-  const job = getJob(jobId);
+  const store = getStore();
+
+  const job = store.jobs.get(jobId);
 
   if (!job) {
-    return res.status(404).json({ error: 'job not found' });
+    return res.status(404).json({ error: 'not found' });
   }
 
-  return res.status(200).json(job);
+  return res.json(job);
 }
