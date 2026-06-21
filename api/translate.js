@@ -15,15 +15,14 @@ export default async function handler(req, res) {
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      error: 'items пустой или неверный'
+      error: 'items пустой'
     });
   }
 
   const prompt = `
 Ты технический переводчик запчастей.
 
-Верни СТРОГО JSON:
-
+Верни строго JSON:
 {
   "results": [
     {
@@ -35,44 +34,45 @@ export default async function handler(req, res) {
 
 Правила:
 - только JSON
-- без текста
 - без markdown
-- длина массива = ${items.length}
+- без текста
+- массив = ${items.length}
 
 Данные:
 ${JSON.stringify(items)}
 `;
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'system',
-            content: 'Ты возвращаешь только JSON без текста.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0
-      })
-    });
+    const response = await fetch(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: 'Отвечай только JSON без текста.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0
+        })
+      }
+    );
 
     const data = await response.json();
 
-    console.log('GROQ RAW:', JSON.stringify(data, null, 2));
-
     if (data?.error) {
       return res.status(502).json({
-        error: 'Ошибка Groq API',
+        error: 'Groq API error',
         details: data.error
       });
     }
@@ -94,7 +94,7 @@ ${JSON.stringify(items)}
       const match = text.match(/\{[\s\S]*\}/);
       if (!match) {
         return res.status(502).json({
-          error: 'Не удалось разобрать JSON',
+          error: 'JSON parse error',
           raw: text
         });
       }
@@ -114,7 +114,7 @@ ${JSON.stringify(items)}
 
   } catch (err) {
     return res.status(500).json({
-      error: 'Серверная ошибка',
+      error: 'Server error',
       details: String(err)
     });
   }
