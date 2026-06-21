@@ -15,21 +15,21 @@ export default async function handler(req, res) {
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      error: 'items пустой или неверный'
+      error: 'items пустой'
     });
   }
 
+  // 👉 СТАБИЛЬНЫЕ АКТУАЛЬНЫЕ МОДЕЛИ
   const models = [
+    'deepseek/deepseek-chat-v3.1',
     'google/gemma-3-27b-it:free',
-    'deepseek/deepseek-r1-0528-qwen3-8b:free',
-    'qwen/qwen3-coder:free',
-    'openrouter/auto'
+    'qwen/qwen3-coder:free'
   ];
 
   const prompt = `
 Ты технический переводчик запчастей.
 
-Верни СТРОГО JSON:
+Верни строго JSON:
 {
   "results": [
     {
@@ -41,9 +41,9 @@ export default async function handler(req, res) {
 
 Правила:
 - только JSON
-- без текста
 - без markdown
-- массив = ${items.length}
+- без текста
+- массив строго = ${items.length}
 
 Данные:
 ${JSON.stringify(items)}
@@ -65,7 +65,7 @@ ${JSON.stringify(items)}
           messages: [
             {
               role: 'system',
-              content: 'Отвечай только JSON. Без текста.'
+              content: 'Отвечай только JSON. Без текста и пояснений.'
             },
             {
               role: 'user',
@@ -79,28 +79,25 @@ ${JSON.stringify(items)}
 
     const data = await response.json();
 
-    console.log(`MODEL: ${model}`);
-    console.log('RAW OPENROUTER RESPONSE:', JSON.stringify(data, null, 2));
+    console.log('MODEL:', model);
+    console.log('RAW:', JSON.stringify(data, null, 2));
 
-    return {
-      ok: response.ok,
-      data
-    };
+    return { ok: response.ok, data };
   }
 
   function extractText(data) {
     if (data?.error) {
-      throw new Error(`OpenRouter error: ${JSON.stringify(data.error)}`);
+      throw new Error(JSON.stringify(data.error));
     }
 
     if (!data?.choices?.length) {
-      throw new Error('Empty choices from model');
+      throw new Error('Empty choices');
     }
 
     const text = data.choices[0]?.message?.content;
 
-    if (!text || typeof text !== 'string') {
-      throw new Error('Empty content from model');
+    if (!text) {
+      throw new Error('Empty content');
     }
 
     return text;
@@ -117,8 +114,8 @@ ${JSON.stringify(items)}
   }
 
   try {
-    let lastError = null;
     let finalText = null;
+    let lastError = null;
 
     for (const model of models) {
       try {
@@ -138,7 +135,7 @@ ${JSON.stringify(items)}
 
     if (!finalText) {
       return res.status(502).json({
-        error: 'Все модели недоступны или вернули пустой ответ',
+        error: 'Все модели недоступны',
         details: lastError
       });
     }
@@ -149,7 +146,7 @@ ${JSON.stringify(items)}
       parsed = safeParse(finalText);
     } catch (e) {
       return res.status(502).json({
-        error: 'Модель вернула невалидный JSON',
+        error: 'Невалидный JSON от модели',
         raw: finalText
       });
     }
@@ -164,6 +161,7 @@ ${JSON.stringify(items)}
     return res.status(200).json({
       results: parsed.results
     });
+
   } catch (err) {
     return res.status(500).json({
       error: 'Серверная ошибка',
