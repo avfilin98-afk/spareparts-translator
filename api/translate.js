@@ -1,5 +1,5 @@
 // Это серверная функция (работает на Vercel).
-// Она принимает список названий запчастей и просит нейросеть DeepSeek
+// Она принимает список названий запчастей и просит нейросеть (через OpenRouter, бесплатная модель)
 // перевести их на технический русский и написать описание для таможенной декларации.
 
 export default async function handler(req, res) {
@@ -8,9 +8,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    res.status(500).json({ error: 'DEEPSEEK_API_KEY не настроен на сервере' });
+    res.status(500).json({ error: 'OPENROUTER_API_KEY не настроен на сервере' });
     return;
   }
 
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const model = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v3.1:free';
 
   const prompt = `Ты - технический переводчик и специалист по таможенному декларированию запчастей для электроинструмента и бензоинструмента (например: дрели, болгарки, бензопилы, триммеры, генераторы и т.п.).
 
@@ -39,11 +39,13 @@ export default async function handler(req, res) {
 ${JSON.stringify(items, null, 0)}`;
 
   try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://spareparts-translator.vercel.app',
+        'X-Title': 'Spareparts Translator'
       },
       body: JSON.stringify({
         model,
@@ -61,7 +63,7 @@ ${JSON.stringify(items, null, 0)}`;
 
     if (!response.ok) {
       const errText = await response.text();
-      res.status(502).json({ error: 'Ошибка от DeepSeek API', details: errText });
+      res.status(502).json({ error: 'Ошибка от OpenRouter API', details: errText });
       return;
     }
 
@@ -77,7 +79,6 @@ ${JSON.stringify(items, null, 0)}`;
     try {
       parsed = JSON.parse(text);
     } catch (e) {
-      // На случай если модель всё же обернула ответ в markdown ```json ... ```
       const cleaned = text.replace(/```json|```/g, '').trim();
       parsed = JSON.parse(cleaned);
     }
